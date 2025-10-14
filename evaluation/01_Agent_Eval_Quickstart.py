@@ -411,11 +411,54 @@ results_isolated_prompt_scorer = mlflow.genai.evaluate(
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC 4 - Potentially add a custom code-based scorer
+# MAGIC 4 - Custom code-based scorers to measure quality for any heuristic/metric or using your own LLM
 
 # COMMAND ----------
 
-## placeholder for custom python scorer
+# DBTITLE 1,Test latency of response
+import mlflow
+from mlflow.genai.scorers import scorer
+from mlflow.entities import Trace, Feedback, SpanType
+
+@scorer
+def llm_response_time_good(trace: Trace) -> Feedback:
+    # Search particular span type from the trace
+    llm_span = trace.search_spans(span_type=SpanType.CHAT_MODEL)[0]
+
+    response_time = (llm_span.end_time_ns - llm_span.start_time_ns) / 1e9 # second
+    max_duration = 5.0
+    if response_time <= max_duration:
+        return Feedback(
+            value="yes",
+            rationale=f"LLM response time {response_time:.2f}s is within the {max_duration}s limit."
+        )
+    else:
+        return Feedback(
+            value="no",
+            rationale=f"LLM response time {response_time:.2f}s exceeds the {max_duration}s limit."
+        )
+
+
+# COMMAND ----------
+
+# DBTITLE 1,Capture length of response
+import mlflow
+from mlflow.genai.scorers import scorer
+
+@scorer
+def response_length(outputs: str) -> int:
+    # Return a numeric metric
+    return len(outputs.split())
+
+# COMMAND ----------
+
+# DBTITLE 1,Create your own custom code scorer
+#### BONUS QUESTION ####
+# Create a custom code-based scorer for this use case
+# Some ideas: 
+#   BLEU/ROUGE
+#   Cost scorer
+#   Valuation/ROI scorer
 
 # COMMAND ----------
 
@@ -424,7 +467,7 @@ results_isolated_prompt_scorer = mlflow.genai.evaluate(
 # COMMAND ----------
 
 # DBTITLE 1,Combine scorers
-scorers = predefined_scorers + guideline_scorers + [prompt_confidence_scorer]
+scorers = predefined_scorers + guideline_scorers + [prompt_confidence_scorer] + [llm_response_time_good] + [response_length]
 
 for scorer in scorers:
     print(f"- {scorer}")
@@ -441,17 +484,19 @@ results = mlflow.genai.evaluate(
 
 # COMMAND ----------
 
-# MAGIC %md ## Step 5. Query Traces to Use & Analyze
-# MAGIC Doesn't seem like the sync to Delta captures feedback... so check API.
+# MAGIC %md ## Step 5. Query Traces, Which Hold Assessments, to Use & Analyze
+# MAGIC - Requires ML classic cluster
 
 # COMMAND ----------
 
+# DBTITLE 1,Using MLflowClient
 import mlflow
 from mlflow.tracking.client import MlflowClient
 
-mlflow.set_registry_uri("databricks")
+notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
 
-experiment_id_example = MlflowClient().get_experiment_by_name("/Users/ben.dunmire@databricks.com/Demo/classifier-eval-quickstart").experiment_id
+experiment_id_example = MlflowClient().get_experiment_by_name(notebook_path).experiment_id
+experiment_id = experiment_id_example
 print(experiment_id_example)
 
 df = spark.read.format("mlflow-experiment").load(experiment_id_example)
@@ -459,10 +504,9 @@ display(df)
 
 # COMMAND ----------
 
+# DBTITLE 1,Use as Pandas Dataframe
 import mlflow
 import pandas as pd
-
-experiment_id = experiment_id_example
 
 # Example 1: Get ALL traces (no filter) to see what we have
 all_traces_df = mlflow.search_traces(
@@ -480,10 +524,17 @@ else:
 
 # COMMAND ----------
 
+# DBTITLE 1,Use as Spark Dataframe
 import mlflow
 import pandas as pd
-from pyspark.sql import SparkSession
 import json
+
+# Helper function to safely serialize objects to JSON
+def safe_json_dumps(obj):
+    try:
+        return json.dumps(obj, default=str)
+    except Exception:
+        return str(obj)
 
 # Get all traces from the experiment
 all_traces = mlflow.search_traces(
@@ -491,31 +542,18 @@ all_traces = mlflow.search_traces(
     return_type="pandas"
 )
 
-# Filter to only traces that have the "classification_sme_assessment" assessment
-traces_with_assessment = all_traces[
-    all_traces['assessments'].apply(
-        lambda assessments: has_assessment(assessments, 'classification_sme_assessment')
-    )
-]
-
-# Convert complex columns to JSON strings to avoid serialization issues
-traces_cleaned = traces_with_assessment.copy()
-
-# Convert complex nested data to JSON strings
+# Convert only the problematic columns to JSON strings
 complex_columns = ['assessments', 'spans', 'trace_metadata', 'tags', 'request', 'response']
 for col in complex_columns:
-    if col in traces_cleaned.columns:
-        traces_cleaned[col] = traces_cleaned[col].apply(
-            lambda x: json.dumps(x) if x is not None else None
+    if col in all_traces.columns:
+        all_traces[col] = all_traces[col].apply(
+            lambda x: safe_json_dumps(x) if x is not None else None
         )
 
-# Convert to Spark DataFrame with all columns
-spark = SparkSession.builder.appName("TraceAnalysis").getOrCreate()
-spark_df = spark.createDataFrame(traces_cleaned)
+# Ensure all columns are now serializable
+all_traces = all_traces.astype(str)
 
-print(f"Found {len(traces_with_assessment)} traces with classification_sme_assessment")
-print(f"Spark DataFrame created with {spark_df.count()} rows")
+# Convert to Spark DataFrame
+spark_df = spark.createDataFrame(all_traces)
 
-# Show all columns
-spark_df.printSchema()
-spark_df.display(5, truncate=False)
+display(spark_df.limit(5))
