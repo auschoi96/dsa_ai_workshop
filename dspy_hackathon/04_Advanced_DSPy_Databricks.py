@@ -19,7 +19,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install --upgrade dspy mlflow databricks-agents databricks-sdk databricks-mcp databricks-dspy uv
+# MAGIC %pip install --upgrade dspy mlflow databricks-agents databricks-sdk databricks-mcp databricks-dspy uv unitycatalog-ai[databricks]
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -81,6 +81,108 @@ customer_product_lookup = Genie(
 
 response = customer_product_lookup.ask_question("what is the latest vehicle Dawn RADANOVITZ-MINNITI purchased")
 print(response.result)
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ##UC Functions
+
+# COMMAND ----------
+
+from unitycatalog.ai.core.databricks import DatabricksFunctionClient
+
+def web_search(query):
+    """Use to research around a specific date. The query should be designed to search for news articles based on key information
+    like dates, events, names of people and so forth"""
+
+    client = DatabricksFunctionClient(execution_mode="local")
+    result = client.execute_function(
+        "system.ai.python_exec",
+        parameters={"query": query}
+    )
+    return result
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC CREATE OR REPLACE FUNCTION genai_in_production_demo_catalog.agents.search_web(query STRING COMMENT 'The search query string to send to the web search API')
+# MAGIC RETURNS STRING
+# MAGIC LANGUAGE PYTHON
+# MAGIC COMMENT "Use this function to search the web for information when you cannot answer a question"
+# MAGIC AS $$
+# MAGIC     import requests
+# MAGIC
+# MAGIC     API_KEY = "f5448507c3feede908000cdb1c2f92b7c770b91f" 
+# MAGIC
+# MAGIC     # Define the search query and other parameters
+# MAGIC     #query = "Python programming"
+# MAGIC
+# MAGIC     # Construct the API endpoint URL
+# MAGIC     url = "https://google.serper.dev/search"
+# MAGIC
+# MAGIC     # Define the headers, including your API key
+# MAGIC     headers = {
+# MAGIC         "X-API-KEY": API_KEY,
+# MAGIC         "Content-Type": "application/json"
+# MAGIC     }
+# MAGIC
+# MAGIC     # Define the parameters for the GET request
+# MAGIC     params = {
+# MAGIC         "q": query
+# MAGIC     }
+# MAGIC
+# MAGIC     return requests.get(url, headers=headers, params=params).json()
+# MAGIC $$
+
+# COMMAND ----------
+
+from unitycatalog.ai.core.databricks import DatabricksFunctionClient
+
+client = DatabricksFunctionClient()
+
+CATALOG = "genai_in_production_demo_catalog"
+SCHEMA = "agents"
+
+def search_function(code: str) -> str:
+    """
+    Stores Python code as a string.
+    Args:
+        code (str): The Python code to store.
+    Returns:
+        str: The stored code.
+    """
+
+    code = """    import requests
+
+    API_KEY = "f5448507c3feede908000cdb1c2f92b7c770b91f" 
+
+    # Define the search query and other parameters
+    #query = "Python programming"
+
+    # Construct the API endpoint URL
+    url = "https://google.serper.dev/search"
+
+    # Define the headers, including your API key
+    headers = {
+        "X-API-KEY": API_KEY,
+        "Content-Type": "application/json"
+    }
+
+    # Define the parameters for the GET request
+    params = {
+        "q": query
+    }
+
+    return requests.get(url, headers=headers, params=params).json()"""
+    return code
+
+function_info = client.create_python_function(
+    func=search_function,
+    catalog=CATALOG,
+    schema=SCHEMA,
+    replace=True
+)
+print(function_info)
 
 # COMMAND ----------
 
@@ -230,4 +332,5 @@ endpoint = client.create_endpoint(
 # MAGIC );
 
 # COMMAND ----------
+
 
