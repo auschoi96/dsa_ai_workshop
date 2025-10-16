@@ -266,7 +266,7 @@ eval_data = [
 # MAGIC     - **Guidelines-Based** are pass/fail criteria where the LLM evaluates output and assigns pass/fail (https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/concepts/judges/guidelines). The direct `judges.meets_guidelines` SDK is wrapped in prebuilt `Guidelines()` scorer.
 # MAGIC     - **Prompt-Based** are fully customized checks for more complex evaluations where you want an LLM-based assessment that provides a different response than pass/fail (https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/concepts/judges/prompt-based-judge)
 # MAGIC
-# MAGIC - **Scorers** are
+# MAGIC - **Scorers** are an MLflow-specific construct which execute the evaluation of judges (the actual assessments). Scorers wrap a lot of the complexity to do with traces, feedback, and other granular elements so assessments can be pretty easily performed and logged in MLflow.
 # MAGIC
 # MAGIC - **Ground Truths** are expected/correct outputs (e.g. labels, fact, gold-standard answers) used as the basis for quality assessment; some scorers/judges require ground truths to function
 
