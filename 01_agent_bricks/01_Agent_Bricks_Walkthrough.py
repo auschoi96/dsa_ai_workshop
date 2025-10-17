@@ -19,8 +19,10 @@
 # MAGIC 1.2. Add Knowledge Sources
 # MAGIC We will add two main knowledge sources. When adding each knowledge source, you must specify the path to the underlying files stored in your Unity Catalog volume.
 # MAGIC
-# MAGIC - **knowledge Base:** This contains support articles from our knowledge base. It has FAQs, debugging tips, and more. It also contains company policies around things like data overages and early termination fees.
+# MAGIC - **Knowledge Base:** This contains support articles from our knowledge base. It has FAQs, debugging tips, and more. It also contains company policies around things like data overages and early termination fees.
+# MAGIC   - /Volumes/genai_in_production_demo_catalog/customer_service/tech_support/knowledge_base
 # MAGIC - **Support Tickets:** This contains support tickets from 2024 and 2025 and the resolution to issues. Use this to find error codes, how to fix technical issues.
+# MAGIC   - /Volumes/genai_in_production_demo_catalog/customer_service/tech_support/support_tickets
 # MAGIC
 # MAGIC <img src=https://raw.githubusercontent.com/chen-data-ai/Agent-Bricks-Workshop/refs/heads/main/resources/screenshots/screenshot_knowledge_assistant_config_2.png width="60%">
 
@@ -94,7 +96,9 @@
 # MAGIC   - **Bakehouse Sales Start Space** which is the default Genie containing information about bakery sales and inventory
 # MAGIC - ####Agent Endpoints
 # MAGIC   - **ka-f67b8b54-endpoint** which is a technical customer support agent for a telecommunications company
+# MAGIC     - Source files in /Volumes/genai_in_production_demo_catalog/customer_service/tech_support
 # MAGIC   - **ka-2b918ccd-endpoint or ka-b77ac499-endpoint** which contains 10K financial documents for a number of large, enterprise companies
+# MAGIC     - Source files in /Volumes/genai_in_production_demo_catalog/agents/dsa_volume
 # MAGIC - ####UC Functions
 # MAGIC   - **system.ai.python_exec** an inbuilt function to execute stateless Python code
 # MAGIC   - **genai_in_production_demo_catalog.agents.search_web** which can search the web
