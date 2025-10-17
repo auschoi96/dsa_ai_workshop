@@ -15,6 +15,11 @@
 
 # COMMAND ----------
 
+import dspy
+import mlflow
+import databricks_dspy
+
+mlflow.dspy.autolog()
 # databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
 databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-120b', cache=False)
 dspy.configure(lm=databricksLM)
