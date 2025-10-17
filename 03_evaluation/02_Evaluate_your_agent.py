@@ -5,114 +5,32 @@
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #Making an Agent, or multi-agent? 
+# MAGIC #Using MLflow make_judge to make a custom judge
 # MAGIC
-# MAGIC Now that we've seen how to make a tool calling agent in dspy, we will use a combination of tools to create a multi-tool calling agent. 
+# MAGIC Mlflow make judge capability gives us flexibility in creating a judge that fits our use case 
 # MAGIC
-# MAGIC For this, we have prepared the following resources for you to use: 
-# MAGIC 1. Genie Space called patient lookup with Fake Patient Data 
-# MAGIC 2. Vector Search Index with sample insurance documents (genai_in_production_demo_catalog.agents.sbc_details_index). These sample insurance documents generally don't have the big company insurance documents in here so don't expect it to retrieve precise details on this
-# MAGIC 3. UC Function that hits you.com 
+# MAGIC Let's take the agent we built in notebook 5 of the hackathon and evaluate it with our own judges
 # MAGIC
-# MAGIC Combine these tools to do the following:
-# MAGIC
-# MAGIC 1. Use a Genie Space to look up the details of a patient and their associated insurance documents 
-# MAGIC 2. Use the UC function you.com to look up more information about the patient 
-# MAGIC 3. Optional: Use the new DBSQL Managed MCP Server to write this information to a table
-# MAGIC
-# MAGIC Feel free to use the templates from notebook 4 and below to add more tools of your choice
+# MAGIC Documentation: https://mlflow.org/docs/latest/genai/eval-monitor/scorers/llm-judge/make-judge/
 
 # COMMAND ----------
 
-import dspy
-import mlflow
-import databricks_dspy
-
-mlflow.dspy.autolog()
-
-# databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-120b', cache=False)
-databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
+# databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
+databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-120b', cache=False)
 dspy.configure(lm=databricksLM)
 
-predict = dspy.Predict("question->answer")
-
-print(predict(question="why did a chicken cross the kitchen?"))
-
-
-
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC #Make a UC Function
-# MAGIC
-# MAGIC Although the SQL code is provided below, it's mostly if you want to make your own UC function. The python code to hit the UC function is provided in Cell 6
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC CREATE OR REPLACE FUNCTION genai_in_production_demo_catalog.agents.<TODO: update to your own name>(<TODO: update the input to what your function needs> COMMENT <TODO: add a description of what the input should be/look like>)
-# MAGIC RETURNS STRING
-# MAGIC LANGUAGE PYTHON
-# MAGIC COMMENT <TODO: Add a description of what this function does to help the agent pick the function>
-# MAGIC AS $$
-# MAGIC <TODO: python code goes here. it's like defining a python function>
-# MAGIC $$
+class patient_lookup_websearch(dspy.Signature):
+  """This agent looks up some patients and then looks up each patient insurance details with health_insurance_look_up"""
+  query: str = dspy.InputField()
+  patient_report: str = dspy.OutputField()
 
 # COMMAND ----------
 
 from unitycatalog.ai.core.databricks import DatabricksFunctionClient
-
-def web_search(query):
-    """Use to research around a specific date. The query should be designed to search for news articles based on key information
-    like dates, events, names of people and so forth"""
-
-    client = DatabricksFunctionClient(execution_mode="local")
-    result = client.execute_function(
-        "genai_in_production_demo_catalog.agents.<TODO: update to your own name>",
-        # "genai_in_production_demo_catalog.agents.search_web", #default you.com search function you can use
-        parameters={"query": query}
-    )
-    return result
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #Make a Genie Tool
-# MAGIC
-# MAGIC The Genie space has already been created for you. Here are the details: 
-# MAGIC
-# MAGIC Genie ID: 01f0aa277c491ec9bbed549be09984cd
-# MAGIC Name: Patient Lookup 
-# MAGIC
-# MAGIC It has fake patient data and location they visited
-# MAGIC
-# MAGIC Documentation: https://api-docs.databricks.com/python/databricks-ai-bridge/latest/databricks_ai_bridge.html
-
-# COMMAND ----------
-
 from databricks_ai_bridge.genie import Genie
 from databricks.sdk import WorkspaceClient
-
-#TODO: create a python function that returns the result of the Genie Space
-
-def genie_tool():
-    patient_lookup = Genie(
-        space_id="01f0aa277c491ec9bbed549be09984cd", #change to your Genie Space ID
-        client=WorkspaceClient()  
-    )
-
-    response = TODO
-    return TODO
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #Use a Vector Search Index 
-# MAGIC
-# MAGIC Below is some sample code to interact with a prebuilt Vector Search Index that we made
-
-# COMMAND ----------
-
 from databricks_dspy import DatabricksRM
 
 def health_insurance_look_up(question):
@@ -130,175 +48,6 @@ def health_insurance_look_up(question):
 
   return result
 
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #MCP Interaction
-# MAGIC
-# MAGIC The DBSQL MCP just came out! Here's how to use it in case you want to use MCP
-
-# COMMAND ----------
-
-from databricks_mcp.oauth_provider import DatabricksOAuthClientProvider
-from mcp.client.streamable_http import streamablehttp_client
-from mcp.client.session import ClientSession
-from databricks.sdk import WorkspaceClient
-import dspy
-
-# Initialize the Databricks workspace client
-workspace_client = WorkspaceClient()
-
-host = workspace_client.config.host
-MANAGED_MCP_SERVER_URLS = [
-    f"{host}/api/2.0/mcp/functions/system/ai",
-    f"{host}/api/2.0/mcp/sql" #this is the new MCP server 
-]
-
-databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
-dspy.configure(lm=databricksLM)
-
-async with streamablehttp_client(
-    url=f"{host}/api/2.0/mcp/sql", #this is the new MCP server
-    auth=DatabricksOAuthClientProvider(workspace_client),
-) as (read_stream, write_stream, _):
-    async with ClientSession(read_stream, write_stream) as session:
-        await session.initialize()
-        tools = await session.list_tools()
-        print(tools)
-        # Convert MCP tools to DSPy tools
-        dspy_tools = []
-        for tool in tools.tools:
-            dspy_tools.append(dspy.Tool.from_mcp_tool(session, tool))
-
-        # Create the agent
-        react = dspy.ReAct("question -> answer", tools=dspy_tools)
-
-        result = await react.acall(question="find information of patients in genai_in_production_demo_catalog.agents.patient_vists")
-        print(result.answer)
-
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #Put your tools together! 
-# MAGIC Combine these tools to do the following:
-# MAGIC
-# MAGIC 1. Look up the details of a patient and their associated insurance documents
-# MAGIC 2. Use the UC function you.com to look up more information about the patient
-# MAGIC 3. Compile all the information and write it back to a delta table using DBSQL MCP server
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #Easy way
-# MAGIC
-# MAGIC You can use dspy.ReAct for an OOTB method to quickly stitch tools together
-# MAGIC
-# MAGIC Task: 
-# MAGIC Combine these tools to do the following:
-# MAGIC
-# MAGIC 1. Use a Genie Space to look up the details of a patient and their associated insurance documents 
-# MAGIC 2. Use the UC function you.com to look up more information about the patient 
-# MAGIC 3. Optional: Use the new DBSQL Managed MCP Server to write this information to a table
-# MAGIC
-# MAGIC Remember, the tool description is very important to help the Agent identify what tool to call. Here is the Anthropic guide again: https://www.anthropic.com/engineering/writing-tools-for-agents 
-# MAGIC
-
-# COMMAND ----------
-
-class patient_lookup_websearch(dspy.Signature):
-  """TODO"""
-  TODO = dspy.InputField()
-  TODO = dspy.OutputField()
-
-# COMMAND ----------
-
-patient_lookup = dspy.ReAct(patient_lookup_websearch, tools=[TODO, TODO]) 
-
-# COMMAND ----------
-
-#Test
-question = "Identify patients who have the most severe symptoms based on doctor notes"
-dsa_result = patient_lookup(query=question)
-
-# COMMAND ----------
-
-from IPython.display import Markdown
-Markdown(dsa_result.TODO)
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #Below is a template of defining your own module 
-# MAGIC
-# MAGIC This is typically used if you wish to add more python code inbetween LLM calls or want more control over what happens under the hood. You can define multiple python functions and other logic directly in a custom module. You do not need to use this method
-
-# COMMAND ----------
-
-class BasicModule(dspy.Module):
-    """
-    <TODO: Describe what this module does> 
-    """
-    
-    def __init__(self):
-        super().__init__()
-        <TODO: add your 
-        self.predictor = dspy.ChainOfThought(BasicSignature)
-        
-    def forward(self, input_field: str) -> dspy.Prediction:
-        """
-        Forward pass of the module.
-        
-        Args:
-            input_field: Input string for processing
-            
-        Returns:
-            dspy.Prediction object with output_field
-        """
-        prediction = self.predictor(input_field=input_field)
-        return prediction
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #Now, try to make the same Agent in Agent Bricks 
-# MAGIC
-# MAGIC Use Agent Bricks Multi Agent Supervisor to create the same agent! 
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC #testing
-
-# COMMAND ----------
-
-databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
-dspy.configure(lm=databricksLM)
-
-# COMMAND ----------
-
-class patient_lookup_websearch(dspy.Signature):
-  """This agent looks up some patients and then looks up each patient insurance details with health_insurance_look_up"""
-  query: str = dspy.InputField()
-  patient_report: str = dspy.OutputField()
-
-# COMMAND ----------
-
-from unitycatalog.ai.core.databricks import DatabricksFunctionClient
-from databricks_ai_bridge.genie import Genie
-from databricks.sdk import WorkspaceClient
-
-def patient_web_search(people: str):
-    """Use to research more information by doing a websearch"""
-
-    client = DatabricksFunctionClient(execution_mode="local")
-    result = client.execute_function(
-        # "genai_in_production_demo_catalog.agents.<TODO: update to your own name>",
-        "genai_in_production_demo_catalog.agents.search_web", #default you.com search function you can use
-        parameters={"query": f"{people}"}
-    )
-    return result
-
 def patient_lookup(query):
     """use natural language to lookup patient information"""
     patient_lookup = Genie(
@@ -311,37 +60,31 @@ def patient_lookup(query):
 
 # COMMAND ----------
 
+# MAGIC %md
+# MAGIC #Double check that it works
+
+# COMMAND ----------
+
 question = "Identify patients who have the most severe symptoms based on doctor notes"
 patient_report = dspy.ReAct(patient_lookup_websearch, tools=[health_insurance_look_up, patient_lookup])
-result = patient_report(query=question)
-print(result)
+agent_output = patient_report(query=question)
+print(agent_output)
 
 # COMMAND ----------
 
 from IPython.display import Markdown
-Markdown(result.patient_report)
+Markdown(agent_output.patient_report)
 
 # COMMAND ----------
 
-databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-20b', cache=False)
-dspy.configure(lm=databricksLM)
+context = json.dumps(agent_output.trajectory.as_dict() if hasattr(agent_output.trajectory, "as_dict") else str(agent_output.trajectory), indent=2)
 
 # COMMAND ----------
 
-question = "Identify patients who have the most severe symptoms based on doctor notes"
-patient_report = dspy.ReAct(patient_lookup_websearch, tools=[web_search, patient_lookup])
-result = patient_report(query=question)
-output = result.patient_report 
-print(result)
-
-# COMMAND ----------
-
-from IPython.display import Markdown
-Markdown(result.patient_report)
-
-# COMMAND ----------
-
-context = json.dumps(result.trajectory.as_dict() if hasattr(result.trajectory, "as_dict") else str(result.trajectory), indent=2)
+# MAGIC %md
+# MAGIC #Let's it out ourselves
+# MAGIC
+# MAGIC We can use these judges to power prompt optimizers like GEPA or set them in our Experiment to use for post-production evaluation and monitoring
 
 # COMMAND ----------
 
@@ -349,7 +92,7 @@ from mlflow.genai.judges import is_context_relevant
 
 feedback = is_context_relevant(
     request=question,
-    context=result.patient_report
+    context=agent_output.patient_report
 )
 print(feedback.value)  # "yes"
 print(feedback.rationale)  # Explanation of groundedness
@@ -395,11 +138,52 @@ model="databricks:/databricks-claude-sonnet-4-5"
 # Test the scorer on a support interaction
 result = formatting_eval(
     inputs={"question": question, "context": context},
-    outputs={"output": output}
+    outputs={"output": agent_output.patient_report}
 )
 
 print(f"Rating: {result.value}")
 print(f"Reasoning: {result.rationale}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #Try it yourself! 
+# MAGIC
+# MAGIC Make your own judge for the Agent
+
+# COMMAND ----------
+
+TODO = make_judge(
+name="TODO",
+instructions=(
+    TODO
+),
+model="databricks:/databricks-claude-sonnet-4-5"
+)
+
+# Test the scorer on a support interaction
+result = formatting_eval(
+    inputs=TODO,
+    outputs=TODO
+)
+
+print(f"Rating: {result.value}")
+print(f"Reasoning: {result.rationale}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #That's the end of the workshop!
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #Appendix: GEPA 
+# MAGIC
+# MAGIC We won't cover how to run GEPA for this agent due to Rate Limits and other resource limits, especially from a bunch of people hitting the APIs at the same time. 
+# MAGIC
+# MAGIC Fundamentally, you use a combination of judges and datasets to ground and optimize your agents with your data. Try it out below!
+# MAGIC
 
 # COMMAND ----------
 
