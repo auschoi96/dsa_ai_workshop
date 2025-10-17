@@ -183,7 +183,7 @@ print(f"Reasoning: {result.rationale}")
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #Appendix: GEPA 
+# MAGIC #Appendix: GEPA (it doesn't work rn)
 # MAGIC
 # MAGIC We won't cover how to run GEPA for this agent due to Rate Limits and other resource limits, especially from a bunch of people hitting the APIs at the same time. 
 # MAGIC
