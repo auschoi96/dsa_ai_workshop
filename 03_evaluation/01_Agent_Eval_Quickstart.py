@@ -266,7 +266,7 @@ eval_data = [
 # MAGIC     - **Guidelines-Based** are pass/fail criteria where the LLM evaluates output and assigns pass/fail (https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/concepts/judges/guidelines). The direct `judges.meets_guidelines` SDK is wrapped in prebuilt `Guidelines()` scorer.
 # MAGIC     - **Prompt-Based** are fully customized checks for more complex evaluations where you want an LLM-based assessment that provides a different response than pass/fail (https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/concepts/judges/prompt-based-judge)
 # MAGIC
-# MAGIC - **Scorers** are
+# MAGIC - **Scorers** are an MLflow-specific construct which execute the evaluation of judges (the actual assessments). Scorers wrap a lot of the complexity to do with traces, feedback, and other granular elements so assessments can be pretty easily performed and logged in MLflow.
 # MAGIC
 # MAGIC - **Ground Truths** are expected/correct outputs (e.g. labels, fact, gold-standard answers) used as the basis for quality assessment; some scorers/judges require ground truths to function
 
@@ -397,6 +397,52 @@ results_isolated_prompt_scorer = mlflow.genai.evaluate(
     data=eval_data_prompt_scorer,
     scorers=[prompt_confidence_scorer]
 )
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC BUT, `custom_prompt_judge()` will be deprecated with MLflow 3.4+ and we'll need to use `make_judge()`: https://mlflow.org/docs/latest/genai/eval-monitor/scorers/llm-judge/make-judge/.
+
+# COMMAND ----------
+
+# DBTITLE 1,Re-write using make_judge()
+from mlflow.genai.judges import make_judge
+import mlflow
+
+# Define prompt-based judge to provide confidence in the classification using make_judge
+confidence_judge_using_make = make_judge(
+    name="classification_confidence",
+    instructions=(
+        "You are an expert financial analyst. Your task is to judge the correctness and the quality of reasoning for the classification of a financial product."
+        "The Financial Product is {{ inputs }}.\n\n"
+        "The Classification & Reasoning is {{ outputs }}.\n\n"
+        "Evaluate the classification considering:"
+        "- Is the classification label factually correct?"
+        "- Does the provided reasoning logically support the label?\n\n"
+        "Select one of the four following ratings:\n"
+        "'correct_and_well_reasoned': The classification is correct and the reasoning is sound, relevant, and directly supports the conclusion.\n"
+        "'correct_but_poorly_reasoned'': The classification is correct, but the reasoning is weak, incomplete, or contains errors.\n"
+        "'incorrect': The classification is factually wrong, regardless of the reasoning.\n"
+        "'unclear': The classification or reasoning is too ambiguous or vague to judge."
+    ),
+##    numeric_values={
+##        "correct_and_well_reasoned": 1.0,
+##        "correct_but_poorly_reasoned": 0.6,
+##        "incorrect": 0.3,
+##        "unclear": 0
+##    },
+    model="databricks:/databricks-claude-sonnet-4-5"
+)
+
+# Direct usage of SDK with a hard-coded example
+feedback = confidence_judge(
+    inputs={"input_description": 'Chase Sapphire preferred'},
+    outputs={"classification_output": 'Credit Card. The Chase Sapphire Preferred is a well-known credit card product offered by Chase Bank that provides rewards, travel benefits, and purchase protections to cardholders.'}
+)
+
+print(feedback.value)
+print(feedback.metadata)
+print(feedback.rationale)
 
 # COMMAND ----------
 
