@@ -332,3 +332,4 @@ endpoint = client.create_endpoint(
 
 # COMMAND ----------
 
+

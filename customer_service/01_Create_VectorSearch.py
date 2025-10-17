@@ -206,3 +206,4 @@ print(f"index {vs_index_fullname} on table {source_table_fullname} is ready")
 
 # COMMAND ----------
 
+
