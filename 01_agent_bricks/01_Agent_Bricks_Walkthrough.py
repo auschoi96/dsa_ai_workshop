@@ -80,7 +80,7 @@
 # MAGIC %md
 # MAGIC Start by creating a new Multi-Agent Supervisor. You'll see a few pieces of information that you can configure in a name (make it something unique since we'll be creating a lot), description of the agent, up to 20 different agent/tools you can provide to the supervisor, and then optional instructions. 
 # MAGIC
-# MAGIC ![MAS Overview.png](./MAS Overview.png "MAS Overview.png")
+# MAGIC ![MAS Overview.png](./Screenshots/MAS Overview.png "MAS Overview.png")
 # MAGIC
 # MAGIC There is not a precise MAS you need to create now, use the time to experiment with different tool calling techniques and different assortments of tools. Below will list out the tools that exist in the workspace (or you can create your own!). The goal is not to achieve a specific MAS but to understand what setup looks like and what customers go through in identifying a use case and then building a tool to solve it.
 
