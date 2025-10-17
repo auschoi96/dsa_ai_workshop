@@ -14,7 +14,11 @@
 # MAGIC 2. Vector Search Index with sample insurance documents (genai_in_production_demo_catalog.agents.sbc_details_index). These sample insurance documents generally don't have the big company insurance documents in here so don't expect it to retrieve precise details on this
 # MAGIC 3. UC Function that hits you.com 
 # MAGIC
-# MAGIC Combine these tools to do the following:
+# MAGIC ### Try to recreate the Agent Bricks MAS you made earlier in code
+# MAGIC
+# MAGIC or
+# MAGIC
+# MAGIC ### Combine these tools to do the following:
 # MAGIC
 # MAGIC 1. Use a Genie Space to look up the details of a patient and their associated insurance documents 
 # MAGIC 2. Use the UC function you.com to look up more information about the patient 
@@ -260,7 +264,4 @@ class BasicModule(dspy.Module):
 
 # COMMAND ----------
 
-# MAGIC %md
-# MAGIC #Now, try to make the same Agent in Agent Bricks 
-# MAGIC
-# MAGIC Use Agent Bricks Multi Agent Supervisor to create the same agent! 
+
