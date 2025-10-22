@@ -1,5 +1,5 @@
 # Databricks notebook source
-# MAGIC %pip install --upgrade databricks-sdk databricks-vectorsearch
+# MAGIC %pip install --upgrade databricks-sdk databricks-vectorsearch yfinance wikipedia
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -93,7 +93,7 @@ class RAG(dspy.Module):
 
     def forward(self, question, **kwargs):
         with dspy.context(lm=dspy.LM('databricks/databricks-meta-llama-3-1-8b-instruct')): #We can change what LLM we use for a specific DSPy call. 
-            query = self.query_generator(question=question).response #we use the first signature to convert the question from the user into a query. We use the attribute access to get only the query, not the dspy.Prediction
+            query = self.query_generator(question=question).query #we use the first signature to convert the question from the user into a query. We use the attribute access to get only the query, not the dspy.Prediction
         context = search_wikipedia(query)[0] #The query created by the LLM is used to serach wikipedia
         return self.answer_generator(question=question, context=context).answer #the context retrieved from wikipedia is then sent to the 2nd inline signature call to create the final answer
 
@@ -268,10 +268,10 @@ print(stock_assistant(article=article))
 import dspy
 import json
 import mlflow
-llm = dspy.LM('databricks/databricks-meta-llama-3-1-8b-instruct', cache=False)
+# llm = dspy.LM('databricks/databricks-meta-llama-3-1-8b-instruct', cache=False)
 # llm = dspy.LM('databricks/databricks-gemma-3-12b', cache=False)
 # llm = dspy.LM('databricks/databricks-meta-llama-3-3-70b-instruct', cache=False)
-# llm = dspy.LM('databricks/databricks-claude-3-7-sonnet', cache=False)
+llm = dspy.LM('databricks/databricks-claude-3-7-sonnet', cache=False)
 dspy.configure(lm=llm)
 
 class TickerIdentifier(dspy.Signature):

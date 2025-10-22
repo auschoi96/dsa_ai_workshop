@@ -20,8 +20,8 @@ import mlflow
 import databricks_dspy
 
 mlflow.dspy.autolog()
-# databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
-databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-120b', cache=False)
+databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
+# databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-120b', cache=False)
 dspy.configure(lm=databricksLM)
 
 # COMMAND ----------
@@ -82,12 +82,13 @@ Markdown(agent_output.patient_report)
 
 # COMMAND ----------
 
+import json
 context = json.dumps(agent_output.trajectory.as_dict() if hasattr(agent_output.trajectory, "as_dict") else str(agent_output.trajectory), indent=2)
 
 # COMMAND ----------
 
 # MAGIC %md
-# MAGIC #Let's it out ourselves
+# MAGIC #Let's try it out ourselves
 # MAGIC
 # MAGIC We can use these judges to power prompt optimizers like GEPA or set them in our Experiment to use for post-production evaluation and monitoring
 
