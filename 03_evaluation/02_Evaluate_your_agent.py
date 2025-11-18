@@ -41,8 +41,7 @@ from databricks_dspy import DatabricksRM
 def health_insurance_look_up(question):
   """Used to query a vector search endpoint"""
   rm = DatabricksRM(
-      databricks_index_name="genai_in_production_demo_catalog.agents.sbc_details_index", #change this to your index
-      databricks_token="your_databricks_token", #change this to your token, Optional if working in a databricks notebook
+      databricks_index_name="austin_choi_demo_catalog.demo_data.sbc_details_index", #change this to your index
       columns=["chunk_id", "content"], #change these to columns you would like to query and retrieve 
       text_column_name="content", #change this to the text column being retrieved 
       docs_id_column_name="chunk_id", #change to the ID 
@@ -53,10 +52,20 @@ def health_insurance_look_up(question):
 
   return result
 
+def web_search(query):
+    """Used to find more information about difficult scientific words"""
+    client = DatabricksFunctionClient(execution_mode="local")
+    result = client.execute_function(
+        "rajeshag.default.get_ydc_snippets",
+        parameters={"query": query}
+    )
+    return result
+
+
 def patient_lookup(query):
-    """use natural language to lookup patient information"""
+    """use natural language to lookup patient diagnosis information"""
     patient_lookup = Genie(
-        space_id="01f0aa277c491ec9bbed549be09984cd", #change to your Genie Space ID
+        space_id="01f0afd5f8a31b0bbaf9736132ef9d47", #change to your Genie Space ID
         client=WorkspaceClient()  
     )
 
@@ -70,8 +79,8 @@ def patient_lookup(query):
 
 # COMMAND ----------
 
-question = "Identify patients who have the most severe symptoms based on doctor notes"
-patient_report = dspy.ReAct(patient_lookup_websearch, tools=[health_insurance_look_up, patient_lookup])
+question = "what are the most common diagnosis? Add any clarifying details found in the web"
+patient_report = dspy.ReAct(patient_lookup_websearch, tools=[web_search, patient_lookup])
 agent_output = patient_report(query=question)
 print(agent_output)
 
@@ -130,6 +139,88 @@ print(f"Rating: {result.value}")
 print(f"Reasoning: {result.rationale}")
 
 # COMMAND ----------
+
+
+formatting_eval = make_judge(
+name="formatting_eval",
+instructions=(
+    "Evaluate if the output in {{ outputs }} is structured with proper markdown and is human legible. "
+    "based on question and context in {{ inputs }} . It should be a professional and detailed report yet concise \n\n"
+    "Rate as: 'High', 'Medium' or 'Low'"
+),
+model="databricks:/databricks-claude-sonnet-4-5"
+)
+
+# Test the scorer on a support interaction
+result = formatting_eval(
+    inputs={"question": question, "context": context},
+    outputs={"output": agent_output.patient_report}
+)
+
+print(f"Rating: {result.value}")
+print(f"Reasoning: {result.rationale}")
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC #Switching to a weaker model
+
+# COMMAND ----------
+
+# databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-claude-sonnet-4-5', cache=False)
+# databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-20b', cache=False)
+databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gemma-3-12b', cache=False)
+
+dspy.configure(lm=databricksLM)
+question = "what are the most common diagnosis? Add any clarifying details found in the web"
+patient_report = dspy.ReAct(patient_lookup_websearch, tools=[web_search, patient_lookup])
+agent_output = patient_report(query=question)
+print(agent_output)
+
+# COMMAND ----------
+
+import json
+context = json.dumps(agent_output.trajectory.as_dict() if hasattr(agent_output.trajectory, "as_dict") else str(agent_output.trajectory), indent=2)
+
+# COMMAND ----------
+
+from mlflow.genai.judges import is_context_relevant
+
+feedback = is_context_relevant(
+    request=question,
+    context=agent_output.patient_report
+)
+print(feedback.value)  # "yes"
+print(feedback.rationale)  # Explanation of groundedness
+
+# COMMAND ----------
+
+from mlflow.genai.judges import make_judge
+
+# Create a scorer for customer support quality
+tool_calling_eval = make_judge(
+    name="tool_call_quality",
+    instructions=(
+        "Evaluate if the trajectory in {{ outputs }} shows accurately utilizes the provided tools to answer the question"
+        "in {{ inputs }}. The web_search tool is a mandatory step to find information about a patient\n\n"
+        "Check if the LLM sent the correct parameter in a good format and assess if a better parameter can be provided"
+        "responds with understanding and care.\n"
+        "Rate as: 'High', 'Medium' or 'Low'"
+    ),
+    model="databricks:/databricks-claude-sonnet-4-5"
+)
+
+# Test the scorer on a support interaction
+result = tool_calling_eval(
+    inputs={"question": question},
+    outputs={"trajectory": context}
+)
+
+print(f"Rating: {result.value}")
+print(f"Reasoning: {result.rationale}")
+
+# COMMAND ----------
+
 
 formatting_eval = make_judge(
 name="formatting_eval",

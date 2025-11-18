@@ -19,7 +19,7 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install --upgrade dspy mlflow databricks-agents databricks-sdk databricks-mcp databricks-dspy uv unitycatalog-ai[databricks]
+# MAGIC %pip install --upgrade dspy mlflow databricks-agents databricks-sdk databricks-mcp databricks-dspy uv git+https://github.com/unitycatalog/unitycatalog.git#subdirectory=ai/integrations/dspy
 # MAGIC dbutils.library.restartPython()
 
 # COMMAND ----------
@@ -89,6 +89,101 @@ print(response.result)
 
 # COMMAND ----------
 
+from unitycatalog.ai.core.base import set_uc_function_client
+from unitycatalog.ai.core.databricks import DatabricksFunctionClient
+
+client = DatabricksFunctionClient()
+
+# COMMAND ----------
+
+# Replace with your own catalog and schema for where your function will be stored
+CATALOG = "austin_choi_demo_catalog"
+SCHEMA = "agents"
+
+func_name = f"{CATALOG}.{SCHEMA}.get_weather"
+# define the function body in UC SQL functions format
+sql_body = f"""CREATE OR REPLACE FUNCTION {func_name}(city STRING COMMENT 'The name of the city to retrieve weather data for.')
+RETURNS STRING
+LANGUAGE PYTHON
+COMMENT 'Retrieve mock weather information for a given city.'
+AS $$
+    mock_data = {{
+        "New York": "Sunny, 25°C",
+        "Los Angeles": "Cloudy, 20°C",
+        "Chicago": "Rainy, 15°C",
+        "Houston": "Thunderstorms, 30°C",
+        "Phoenix": "Sunny, 35°C"}}
+    return mock_data.get(city, "Weather data not available")
+$$
+"""
+
+client.create_function(sql_function_body=sql_body)
+
+# COMMAND ----------
+
+from unitycatalog.ai.dspy.toolkit import UCFunctionToolkit
+
+python_exec = "system.ai.python_exec"
+# Pass the UC function name that we created to the constructor
+toolkit = UCFunctionToolkit(function_names=[func_name, python_exec],
+                             client=client)
+
+# Get the DSPy-compatible tools definitions
+tools = toolkit.tools
+
+# COMMAND ----------
+
+my_tool = toolkit.get_tool(func_name)
+if my_tool:
+    # Call the tool directly
+    result = my_tool.func(city="New York")
+    print(result)
+else:
+    print("Tool not found")
+
+# COMMAND ----------
+
+import dspy
+
+dspy.settings.configure(lm=dspy.LM('databricks/databricks-gpt-oss-120b'), cache=False)
+
+# Create a ReAct agent with our weather tool
+react_agent = dspy.ReAct(
+    signature="question -> answer",
+    tools= toolkit.tools,
+    max_iters=5)
+
+# Example: Ask the agent to reason about weather
+result = react_agent(question="What's the weather like in Los Angeles and New York? Use python to calculate the difference")
+print(result.answer)
+print("Tool calls made:", result.trajectory)
+
+# COMMAND ----------
+
+import dspy
+import dspy
+import mlflow
+import databricks_dspy
+
+mlflow.dspy.autolog()
+
+databricksLM = databricks_dspy.DatabricksLM('databricks/databricks-gpt-oss-120b', cache=False)
+dspy.configure(lm=databricksLM)
+
+# Create a ReAct agent with our weather tool
+react_agent = dspy.ReAct(
+    signature="question -> answer",
+    tools= toolkit.tools,
+    max_iters=5)
+
+# Example: Ask the agent to reason about weather
+result = react_agent(question="What's the weather like in New York? use python to determine 1+1")
+print(result.answer)
+print("Tool calls made:", result.trajectory)
+print("\n\nAnswer: ", result.answer)
+
+# COMMAND ----------
+
 from unitycatalog.ai.core.databricks import DatabricksFunctionClient
 
 def system_python_execution(query):
@@ -104,7 +199,7 @@ def system_python_execution(query):
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC CREATE OR REPLACE FUNCTION genai_in_production_demo_catalog.agents.search_web(query STRING COMMENT 'The search query string to send to the web search API')
+# MAGIC CREATE OR REPLACE FUNCTION austin_choi_demo_catalog.agents.search_web(query STRING COMMENT 'The search query string to send to the web search API')
 # MAGIC RETURNS STRING
 # MAGIC LANGUAGE PYTHON
 # MAGIC COMMENT "Use this function to search the web for information when you cannot answer a question"
@@ -139,7 +234,7 @@ from unitycatalog.ai.core.databricks import DatabricksFunctionClient
 
 client = DatabricksFunctionClient()
 
-CATALOG = "genai_in_production_demo_catalog"
+CATALOG = "austin_choi_demo_catalog"
 SCHEMA = "agents"
 
 def search_function(code: str) -> str:
